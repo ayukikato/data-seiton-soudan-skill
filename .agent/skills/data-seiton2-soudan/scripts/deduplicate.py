@@ -13,25 +13,23 @@ def process_data(input_file, output_file):
 
         print(f"元のデータ件数: {len(df)}")
 
-        # 1. 「イベント名」を相談日程の代わりとして使用（数値が大きいほど新しいと仮定）
-        # ※本来は日付列が望ましいが、サンプルデータでは「イベント名」が日程の順序を示しているように見える
-        # ただし 0.0 は未成立や不明の可能性があるため、後で処理
-        
-        # 2. 相談の成立判断
-        # サンプルデータにはステータス列がないため、
-        # 「イベント名」が 0.0 を「未成立/未相談」、それ以外を「成立」とみなす
-        df_valid = df[df['イベント名'] > 0].copy()
-        
-        # もし相談成立データが1つもない場合は、全データから最新を選ぶ
-        if len(df_valid) == 0:
-            print("警告: 相談成立（イベント名 > 0）のデータが見つかりません。全データから最新を抽出します。")
-            df_valid = df.copy()
+        # 1. 相談の成立フラグを作成（イベント名 > 0 を成立とみなす）
+        df['is_valid'] = df['イベント名'] > 0
+
+        # 2. 優先順位を付けて並べ替え
+        # 第1優先: 相談成立 (True > False の順)
+        # 第2優先: イベント名 (降順: 大きい/新しいものが先)
+        df_sorted = df.sort_values(
+            by=['整理番号', 'is_valid', 'イベント名'],
+            ascending=[True, False, False]
+        )
 
         # 3. 重複排除
-        # 整理番号でグループ化し、イベント名（日程）が最大（最新）のものを残す
-        # 同じイベント名の場合は、最後の行を採用
-        df_sorted = df_valid.sort_values(by=['整理番号', 'イベント名'], ascending=[True, False])
-        df_unique = df_sorted.drop_duplicates(subset='整理番号', keep='first')
+        # 整理番号ごとに、最も優先順位の高い1行（成立最新 or 未成立のみならその1枚）だけを残す
+        df_unique = df_sorted.drop_duplicates(subset='整理番号', keep='first').copy()
+
+        # 作業用列を削除
+        df_unique = df_unique.drop(columns=['is_valid'])
 
         print(f"重複排除後のデータ件数: {len(df_unique)}")
 
